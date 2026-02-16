@@ -553,6 +553,34 @@ function tokenName(addr) {
   return TOKEN_NAMES[addr.toLowerCase()] || (addr.slice(0, 6) + '...' + addr.slice(-4));
 }
 
+// Resolve unknown token symbols via on-chain symbol() call
+async function resolveTokenSymbol(contractAddr) {
+  const cached = TOKEN_NAMES[contractAddr.toLowerCase()];
+  if (cached) return cached;
+  try {
+    const result = await rpcCall('eth_call', [{ to: contractAddr, data: '0x95d89b41' }, 'latest'], 1);
+    if (result && result !== '0x' && result.length > 130) {
+      const hex = result.slice(2);
+      const len = parseInt(hex.slice(64, 128), 16);
+      if (len > 0 && len < 32) {
+        const strHex = hex.slice(128, 128 + len * 2);
+        const bytes = [];
+        for (let i = 0; i < strHex.length; i += 2) bytes.push(parseInt(strHex.substr(i, 2), 16));
+        const symbol = String.fromCharCode(...bytes).replace(/\0/g, '');
+        if (symbol && symbol.length < 20) {
+          TOKEN_NAMES[contractAddr.toLowerCase()] = symbol;
+          return symbol;
+        }
+      }
+    }
+  } catch(e) {}
+  return contractAddr.slice(0, 6) + '...' + contractAddr.slice(-4);
+}
+
+async function resolveTopTokens(tokenAddrs) {
+  await Promise.all(tokenAddrs.map(a => resolveTokenSymbol(a)));
+}
+
 // ── RPC Helpers ──
 const RPC = 'https://api.mainnet.abs.xyz';
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
@@ -705,7 +733,7 @@ async function fetchAllTransfers(address, onProgress) {
 // Native ETH wrapper on Abstract — exclude from token analysis
 const NATIVE_ETH = '0x000000000000000000000000000000000000800a';
 
-function analyzeWallet(address, data) {
+async function analyzeWallet(address, data) {
   const { logs, latestBlock, ethBalance, txCount } = data;
   const addrLower = address.toLowerCase();
 
@@ -943,10 +971,50 @@ function analyzeWallet(address, data) {
   const secondary = sorted[1][0];
 
   // ── Top tokens (ERC-20 only, exclude native ETH) ──
-  const topTokens = Object.entries(tokenTransferCounts)
+  const topTokenAddrs = Object.entries(tokenTransferCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
-    .map(([addr, count]) => ({ name: tokenName(addr), count }));
+    .map(([addr]) => addr);
+
+  // Resolve unknown token symbols on-chain
+  await resolveTopTokens(topTokenAddrs);
+
+  const topTokens = topTokenAddrs.map(addr => ({
+    name: tokenName(addr),
+    count: tokenTransferCounts[addr],
+  }));
+
+  // Find most-held token (longest hold without selling)
+  let longestHoldToken = null;
+  let longestHoldDays = 0;
+  for (const token of tokenSet) {
+    const firstRec = tokenFirstReceive[token];
+    if (!firstRec) continue;
+    const firstSnd = tokenFirstSend[token];
+    const holdBlocks = firstSnd ? (firstSnd - firstRec) : (latestBlock - firstRec);
+    const holdDays = Math.round(holdBlocks / BLOCKS_PER_DAY);
+    if (holdDays > longestHoldDays) {
+      longestHoldDays = holdDays;
+      longestHoldToken = token;
+    }
+  }
+  if (longestHoldToken && !TOKEN_NAMES[longestHoldToken]) {
+    await resolveTokenSymbol(longestHoldToken);
+  }
+
+  // Detect burst vs steady activity
+  const blockBuckets = {};
+  const BUCKET_SIZE = BLOCKS_PER_DAY;
+  transfers.forEach(t => {
+    const bucket = Math.floor(t.block / BUCKET_SIZE);
+    blockBuckets[bucket] = (blockBuckets[bucket] || 0) + 1;
+  });
+  const bucketValues = Object.values(blockBuckets);
+  const maxDayTx = Math.max(...bucketValues);
+  const avgDayTx = bucketValues.reduce((a, b) => a + b, 0) / bucketValues.length;
+  const burstRatio = avgDayTx > 0 ? maxDayTx / avgDayTx : 1;
+  const activeDays = bucketValues.length;
+  const activeDayPct = activitySpanDays > 0 ? Math.round((activeDays / activitySpanDays) * 100) : 100;
 
   // ── Stats ──
   const stats = {
@@ -959,7 +1027,17 @@ function analyzeWallet(address, data) {
     activitySpan: activitySpanDays > 365 ? Math.round(activitySpanDays / 365) + 'y' : activitySpanDays + 'd',
   };
 
-  const summary = generateSummary(primary, secondary, traits, stats, topTokens, avgHoldDays, quickFlipRatio, holdRatio, txPerDay, activitySpanDays);
+  const summaryCtx = {
+    primary, secondary, traits, stats, topTokens,
+    avgHoldDays, quickFlipRatio, holdRatio, txPerDay, activitySpanDays,
+    burstRatio, maxDayTx, activeDayPct, activeDays,
+    longestHoldToken: longestHoldToken ? tokenName(longestHoldToken) : null,
+    longestHoldDays,
+    uniqueTokens, uniqueNFTs, uniqueCounterparties,
+    buyCount, sellCount, concentration,
+    daysSinceLastActivity, ethBalance,
+  };
+  const summary = generateSummary(summaryCtx);
 
   return { primary, secondary, traits, stats, summary, topTokens };
 }
@@ -1028,67 +1106,140 @@ function ghostProfile(address, ethBalance, txCount) {
   };
 }
 
-function generateSummary(primary, secondary, traits, stats, topTokens, avgHoldDays, quickFlipRatio, holdRatio, txPerDay, activitySpanDays) {
-  const parts = [];
+function generateSummary(ctx) {
+  const {
+    primary, secondary, traits, stats, topTokens,
+    avgHoldDays, quickFlipRatio, holdRatio, txPerDay, activitySpanDays,
+    burstRatio, maxDayTx, activeDayPct, activeDays,
+    longestHoldToken, longestHoldDays,
+    uniqueTokens, uniqueNFTs, uniqueCounterparties,
+    buyCount, sellCount, concentration, daysSinceLastActivity, ethBalance,
+  } = ctx;
 
-  // Archetype intro
-  const intros = {
-    'Diamond Hands': `This wallet embodies the Diamond Hands spirit — once tokens are acquired, they're held with conviction.`,
-    'Degen': `A classic degen wallet — always moving, always experimenting, never sitting still.`,
-    'Whale': `This wallet carries serious weight on Abstract — concentrated positions and significant activity.`,
-    'Collector': `A true collector at heart — this wallet has touched a remarkable variety of tokens.`,
-    'Sniper': `Precision over patience — this wallet strikes fast and moves on.`,
-    'Ghost': `The silent type — minimal footprint but watching from the shadows.`,
-    'Strategist': `A measured, balanced approach — no single pattern dominates this wallet's behavior.`,
+  const p = [];
+
+  // ── Opening personality read ──
+  const openings = {
+    'Diamond Hands': [
+      `Conviction runs deep in this wallet. While others panic-sell, this address holds the line.`,
+      `This wallet has one rule: buy and believe. Selling is a last resort, not a strategy.`,
+    ],
+    'Degen': [
+      `If it launched in the last 5 minutes, this wallet probably already aped in. Pure degen energy.`,
+      `This wallet treats Abstract like a casino floor — always at a table, always in action.`,
+    ],
+    'Whale': [
+      `When this wallet moves, the chart moves with it. Concentrated bets and heavy volume define this address.`,
+      `This is a heavyweight on Abstract — few tokens, big positions, serious conviction.`,
+    ],
+    'Collector': [
+      `This wallet collects tokens like trading cards — gotta catch 'em all. Breadth over depth defines their approach.`,
+      `A digital hoarder in the best sense — this wallet samples everything the Abstract ecosystem has to offer.`,
+    ],
+    'Sniper': [
+      `Quick draw, quicker exit. This wallet doesn't marry positions — it dates them briefly and moves on.`,
+      `Surgical precision. This wallet enters fast, takes profit, and ghosts before sentiment shifts.`,
+    ],
+    'Ghost': [
+      `Barely a whisper on-chain. This wallet moves in the shadows, leaving minimal trace.`,
+      `If wallets had stealth mode, this one would have it permanently enabled.`,
+    ],
+    'Strategist': [
+      `No single impulse drives this wallet — it's a balance of instincts. Calculated, diversified, and methodical.`,
+      `This wallet reads like someone who actually thinks before clicking "Confirm Transaction."`,
+    ],
   };
-  parts.push(intros[primary]);
+  const opening = openings[primary];
+  p.push(opening[Math.floor(Math.random() * opening.length)]);
 
-  // Secondary flavor
-  parts.push(`With ${ARCHETYPE_META[secondary].emoji} ${secondary} tendencies as a secondary trait,`);
-
-  // Activity detail
-  if (txPerDay > 5) {
-    parts.push(`they average an impressive ${txPerDay.toFixed(1)} transfers per day.`);
-  } else if (txPerDay > 1) {
-    parts.push(`they maintain a steady pace of ~${txPerDay.toFixed(1)} transfers daily.`);
-  } else if (txPerDay > 0.1) {
-    parts.push(`they trade at a measured pace — roughly one transfer every ${Math.round(1/txPerDay)} days.`);
-  } else {
-    parts.push(`activity is sparse but deliberate.`);
+  // ── Trading rhythm ──
+  if (burstRatio > 5) {
+    p.push(`Their activity comes in bursts — quiet periods punctuated by ${maxDayTx}+ transfer days. When they're on, they're ALL in.`);
+  } else if (burstRatio > 2.5) {
+    p.push(`The trading pattern is streaky — some days nothing, then sudden flurries of activity. An opportunistic rhythm.`);
+  } else if (txPerDay > 3) {
+    p.push(`Remarkably consistent pace — active almost daily with a steady ${txPerDay.toFixed(1)} transfers per day. No day off from the grind.`);
   }
 
-  // Token diversity
-  if (stats.uniqueTokens > 15) {
-    parts.push(`Across ${stats.uniqueTokens} different tokens, the portfolio is highly diverse.`);
-  } else if (stats.uniqueTokens > 5) {
-    parts.push(`They've engaged with ${stats.uniqueTokens} tokens — a healthy mix.`);
-  } else if (stats.uniqueTokens > 0) {
-    parts.push(`With only ${stats.uniqueTokens} token${stats.uniqueTokens === 1 ? '' : 's'}, they stay focused.`);
+  if (activeDayPct < 30 && activitySpanDays > 14) {
+    p.push(`Only active on ${activeDayPct}% of days since first transaction — a patient lurker who picks their spots carefully.`);
+  } else if (activeDayPct > 80) {
+    p.push(`Active on ${activeDayPct}% of days — the kind of trader who checks charts before breakfast.`);
   }
 
-  // Top tokens
+  // ── Portfolio character ──
   if (topTokens.length > 0) {
-    const names = topTokens.slice(0, 3).map(t => t.name);
-    parts.push(`Most active with ${names.join(', ')}.`);
+    const topName = topTokens[0].name;
+    const topPct = Math.round(concentration * 100);
+    if (concentration > 0.5) {
+      p.push(`${topName} dominates the portfolio at ${topPct}% of all transfers — this is a true believer, not a diversifier.`);
+    } else if (topTokens.length >= 3) {
+      p.push(`Core holdings center around ${topTokens[0].name}, ${topTokens[1].name}, and ${topTokens[2].name} — the tokens they keep coming back to.`);
+    } else {
+      p.push(`${topName} is the main focus, making up ${topPct}% of activity.`);
+    }
   }
 
-  // Hold behavior
-  if (holdRatio > 0.7) {
-    parts.push(`Over ${Math.round(holdRatio * 100)}% of tokens acquired have never been sold — strong holder conviction.`);
-  } else if (quickFlipRatio > 0.4) {
-    parts.push(`About ${Math.round(quickFlipRatio * 100)}% of tokens were flipped quickly — a clear appetite for fast moves.`);
+  // ── Holder vs flipper psychology ──
+  if (holdRatio > 0.6 && avgHoldDays > 14) {
+    p.push(`${Math.round(holdRatio * 100)}% of tokens touched have never been sold. This isn't trading — it's accumulation with conviction.`);
+  } else if (holdRatio > 0.4) {
+    p.push(`About ${Math.round(holdRatio * 100)}% of tokens are still held — a mix of conviction plays and forgot-about-its.`);
+  } else if (quickFlipRatio > 0.3) {
+    p.push(`${Math.round(quickFlipRatio * 100)}% of tokens were flipped within hours of acquiring them. The motto: "take profit and don't look back."`);
   }
 
-  // FOMO / risk note
-  if (traits['FOMO Score'] > 70) {
-    parts.push(`The high FOMO score suggests they chase new opportunities aggressively.`);
-  } else if (traits['Risk Tolerance'] > 70) {
-    parts.push(`High risk tolerance drives their strategy — not afraid to go big.`);
-  } else if (traits.Patience > 70) {
-    parts.push(`Patience is their superpower — they let positions mature.`);
+  // ── Longest hold ──
+  if (longestHoldToken && longestHoldDays > 7) {
+    if (longestHoldDays > 90) {
+      p.push(`Diamond-handing ${longestHoldToken} for ${longestHoldDays} days and counting — that's real loyalty in a meme coin world.`);
+    } else if (longestHoldDays > 30) {
+      p.push(`Longest hold: ${longestHoldToken} at ${longestHoldDays} days — showing that patience exists somewhere in the portfolio.`);
+    }
   }
 
-  return parts.join(' ');
+  // ── Buy/sell behavior ──
+  if (buyCount > sellCount * 3) {
+    p.push(`Buys outnumber sells ${(buyCount/sellCount).toFixed(0)}:1 — an accumulator who rarely lets go.`);
+  } else if (sellCount > buyCount * 1.5) {
+    p.push(`More sells than buys — either taking profits or cleaning house. This wallet isn't afraid to exit.`);
+  }
+
+  // ── Social/ecosystem signals ──
+  if (uniqueNFTs > 20) {
+    p.push(`Also deep in the NFT scene with ${uniqueNFTs} collections — clearly embedded in the Abstract community, not just trading.`);
+  } else if (uniqueNFTs > 5) {
+    p.push(`${uniqueNFTs} NFT collections in the mix too — they're not just here for charts.`);
+  }
+
+  if (uniqueCounterparties > 50) {
+    p.push(`Interacted with ${uniqueCounterparties} unique addresses — a wide social web on-chain.`);
+  }
+
+  // ── Recency ──
+  if (daysSinceLastActivity < 1) {
+    p.push(`Last seen: today. Still very much in the game.`);
+  } else if (daysSinceLastActivity < 7) {
+    p.push(`Last active ${daysSinceLastActivity} day${daysSinceLastActivity === 1 ? '' : 's'} ago — still in the trenches.`);
+  } else if (daysSinceLastActivity > 30) {
+    p.push(`Been quiet for ${daysSinceLastActivity} days now. Resting, or already moved on?`);
+  }
+
+  // ── Closing one-liner based on dominant trait ──
+  const maxTrait = Object.entries(traits).sort((a, b) => b[1] - a[1])[0];
+  const closers = {
+    Impulsiveness: `TL;DR: Sees green candle. Clicks buy. Repeat.`,
+    Patience: `TL;DR: The kind of wallet that sets a limit order and takes a nap.`,
+    'Risk Tolerance': `TL;DR: "Safe plays" is not in this wallet's vocabulary.`,
+    Diversification: `TL;DR: Why pick one token when you can pick all of them?`,
+    Consistency: `TL;DR: The tortoise in a world of hares — slow, steady, and still here.`,
+    'FOMO Score': `TL;DR: If someone on CT says "this is the one," this wallet is already in.`,
+  };
+  if (closers[maxTrait[0]] && maxTrait[1] > 60) {
+    p.push(closers[maxTrait[0]]);
+  }
+
+  return p.join(' ');
 }
 
 function clamp(v) { return Math.max(0, Math.min(100, v)); }
@@ -1098,7 +1249,7 @@ const ARCHETYPE_META = {
   'Diamond Hands': { emoji: '💎', color: '#6C63FF' },
   'Degen':         { emoji: '🎰', color: '#FF6B6B' },
   'Whale':         { emoji: '🐋', color: '#4ECDC4' },
-  'Collector':     { emoji: '🦋', color: '#FFB347' },
+  'Collector':     { emoji: '🏆', color: '#FFB347' },
   'Sniper':        { emoji: '🎯', color: '#FF4757' },
   'Ghost':         { emoji: '👻', color: '#A8A8A8' },
   'Strategist':    { emoji: '♟️', color: '#00D632' },
@@ -1170,7 +1321,7 @@ async function startAnalysis() {
     // Small delay for the progress bar to feel satisfying
     await new Promise(r => setTimeout(r, 500));
 
-    const result = analyzeWallet(address, data);
+    const result = await analyzeWallet(address, data);
     renderResults(address, result);
     showScreen('results');
 
