@@ -734,12 +734,27 @@ function analyzeWallet(address, data) {
   }).sort((a, b) => a.block - b.block);
 
   // Separate ERC-20 token transfers (exclude native ETH wrapper) from NFTs
-  const tokenTransfers = allTransfers.filter(t => !t.isNFT && t.token !== NATIVE_ETH);
+  const tokenTransfersRaw = allTransfers.filter(t => !t.isNFT && t.token !== NATIVE_ETH);
   const nftTransfers = allTransfers.filter(t => t.isNFT);
   const ethTransfers = allTransfers.filter(t => t.token === NATIVE_ETH);
 
-  // Use token transfers for personality analysis (the meaningful trading data)
-  const transfers = tokenTransfers;
+  // Filter out spam/airdrop tokens: only received once, never sent out
+  const tokenOutCounts = {};
+  const tokenInCounts = {};
+  tokenTransfersRaw.forEach(t => {
+    if (t.from === addrLower) tokenOutCounts[t.token] = (tokenOutCounts[t.token] || 0) + 1;
+    if (t.to === addrLower) tokenInCounts[t.token] = (tokenInCounts[t.token] || 0) + 1;
+  });
+  const spamTokens = new Set();
+  for (const token of new Set(tokenTransfersRaw.map(t => t.token))) {
+    const outCount = tokenOutCounts[token] || 0;
+    const inCount = tokenInCounts[token] || 0;
+    // Spam: only received once, never sent (unsolicited airdrop)
+    if (outCount === 0 && inCount === 1) spamTokens.add(token);
+  }
+
+  // Use filtered token transfers for personality analysis
+  const transfers = tokenTransfersRaw.filter(t => !spamTokens.has(t.token));
 
   // If no ERC-20 token activity, check if there's only NFT/ETH activity
   if (transfers.length === 0) {
@@ -1215,8 +1230,8 @@ function renderResults(address, result) {
   const grid = document.getElementById('stats-grid');
   const statEntries = [
     { val: result.stats.totalTransfers.toLocaleString(), label: 'Transfers' },
-    { val: result.stats.uniqueTokens, label: 'Tokens' },
-    { val: result.stats.uniqueNFTs || 0, label: 'NFTs' },
+    { val: result.stats.uniqueTokens, label: 'Tokens Traded' },
+    { val: result.stats.uniqueNFTs || 0, label: 'NFT Collections' },
     { val: result.stats.buySellRatio, label: 'Buy/Sell Ratio' },
     { val: result.stats.avgHoldDays, label: 'Avg Hold' },
     { val: result.stats.activitySpan, label: 'Active For' },
