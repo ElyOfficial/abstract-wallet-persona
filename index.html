@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abstract Wallet Persona</title>
+<meta name="description" content="Discover your on-chain personality based on your Abstract wallet activity">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #f0efe9;
+    background-image:
+      linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+    color: #1a1a1a;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+
+  .mono { font-family: 'Space Mono', monospace; }
+
+  header {
+    text-align: center;
+    padding: 32px 16px 20px;
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    top: -50%; left: -20%;
+    width: 60%; height: 200%;
+    background: conic-gradient(from 180deg, rgba(0,214,50,0.08), rgba(255,100,200,0.06), rgba(100,200,255,0.06), rgba(255,230,80,0.06), rgba(0,214,50,0.08));
+    border-radius: 50%;
+    filter: blur(60px);
+    pointer-events: none;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    top: -30%; right: -15%;
+    width: 50%; height: 180%;
+    background: conic-gradient(from 0deg, rgba(255,100,200,0.07), rgba(0,214,50,0.06), rgba(130,80,255,0.06), rgba(255,100,200,0.07));
+    border-radius: 50%;
+    filter: blur(60px);
+    pointer-events: none;
+  }
+  header h1 {
+    font-size: 28px; font-weight: 900; letter-spacing: -0.5px;
+    color: #0d0d0d; position: relative; z-index: 1;
+  }
+  header h1 .green {
+    background: linear-gradient(135deg, #00D632, #00b82e);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  header p.subtitle {
+    margin-top: 8px; font-size: 13px; color: #888;
+    position: relative; z-index: 1;
+  }
+  header p.subtitle a {
+    color: #00B82E; text-decoration: none; font-weight: 700;
+    transition: color 0.15s;
+  }
+  header p.subtitle a:hover { color: #00D632; }
+
+  /* ── Screens ── */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── Landing ── */
+  #landing {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 60px 20px 80px;
+    text-align: center;
+  }
+  #landing .hero-emoji { font-size: 64px; margin-bottom: 16px; }
+  #landing h2 {
+    font-size: 22px; font-weight: 800; margin-bottom: 8px;
+    letter-spacing: -0.3px;
+  }
+  #landing .desc {
+    font-size: 14px; color: #666; line-height: 1.6;
+    margin-bottom: 32px;
+  }
+  .input-group {
+    display: flex; gap: 8px;
+    margin-bottom: 16px;
+  }
+  .input-group input {
+    flex: 1;
+    padding: 14px 16px;
+    border: 2px solid rgba(0,0,0,0.08);
+    border-radius: 12px;
+    font-size: 14px;
+    font-family: 'Space Mono', monospace;
+    background: rgba(255,255,255,0.8);
+    backdrop-filter: blur(8px);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-group input:focus {
+    border-color: #00D632;
+    box-shadow: 0 0 0 3px rgba(0,214,50,0.12);
+  }
+  .input-group input::placeholder { color: #bbb; font-size: 12px; }
+  .btn-analyze {
+    padding: 14px 28px;
+    background: linear-gradient(135deg, #00D632, #00b82e);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.15s;
+    white-space: nowrap;
+  }
+  .btn-analyze:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0,214,50,0.25);
+  }
+  .btn-analyze:disabled {
+    opacity: 0.5; cursor: not-allowed; transform: none;
+    box-shadow: none;
+  }
+  .examples {
+    font-size: 12px; color: #999;
+  }
+  .examples span { margin-right: 4px; }
+  .example-addr {
+    color: #00B82E; cursor: pointer; font-family: 'Space Mono', monospace;
+    font-size: 11px; text-decoration: underline;
+    transition: color 0.15s;
+  }
+  .example-addr:hover { color: #00D632; }
+  .error-msg {
+    margin-top: 12px; padding: 10px 16px;
+    background: rgba(255,60,60,0.08);
+    border: 1px solid rgba(255,60,60,0.2);
+    border-radius: 10px;
+    font-size: 13px; color: #c00;
+    display: none;
+  }
+
+  /* ── Loading ── */
+  #loading {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 80px 20px;
+    text-align: center;
+  }
+  #loading .loading-emoji { font-size: 48px; margin-bottom: 20px; }
+  #loading h2 { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+  .loading-address {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; color: #888;
+    margin-bottom: 24px;
+    word-break: break-all;
+  }
+  .progress-wrap {
+    background: rgba(0,0,0,0.06);
+    border-radius: 8px;
+    height: 10px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #00D632, #00f040);
+    border-radius: 8px;
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+  .loading-status {
+    font-size: 13px; color: #888;
+    margin-bottom: 6px;
+  }
+  .loading-stats {
+    font-size: 12px; color: #aaa;
+    font-family: 'Space Mono', monospace;
+  }
+  .btn-cancel {
+    margin-top: 24px;
+    padding: 10px 24px;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 10px;
+    font-size: 13px; font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    color: #666;
+    transition: border-color 0.15s;
+  }
+  .btn-cancel:hover { border-color: #c00; color: #c00; }
+
+  /* ── Results ── */
+  #results {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  /* Personality Card */
+  .persona-card {
+    position: relative;
+    background: rgba(255,255,255,0.75);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 16px;
+    padding: 28px 24px;
+    box-shadow: 3px 3px 0 #1a1a1a;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .persona-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,0.4) 25%,
+      rgba(255,255,255,0) 50%,
+      rgba(255,255,255,0.3) 75%,
+      rgba(255,255,255,0) 100%
+    );
+    background-size: 200% 200%;
+    animation: shimmer 3s ease-in-out infinite;
+    pointer-events: none;
+    border-radius: 16px;
+  }
+  @keyframes shimmer {
+    0% { background-position: -100% -100%; }
+    100% { background-position: 200% 200%; }
+  }
+  .persona-header {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 16px;
+    position: relative; z-index: 1;
+  }
+  .persona-emoji {
+    font-size: 48px;
+    width: 64px; height: 64px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.5);
+    border-radius: 14px;
+    border: 2px solid rgba(0,0,0,0.06);
+  }
+  .persona-titles { flex: 1; }
+  .persona-archetype {
+    font-size: 22px; font-weight: 900;
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+  }
+  .persona-secondary {
+    font-size: 13px; color: #888;
+    margin-top: 2px;
+  }
+  .persona-address {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; color: #aaa;
+    margin-top: 12px;
+    word-break: break-all;
+    position: relative; z-index: 1;
+  }
+
+  /* Trait Bars */
+  .traits-panel {
+    background: rgba(255,255,255,0.65);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+    padding: 20px 22px;
+    box-shadow: 3px 3px 0 #1a1a1a;
+    margin-bottom: 20px;
+  }
+  .traits-panel h3 {
+    font-size: 11px; font-weight: 700; color: #999;
+    text-transform: uppercase; letter-spacing: 2px;
+    margin-bottom: 16px;
+  }
+  .trait-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px;
+  }
+  .trait-row:last-child { margin-bottom: 0; }
+  .trait-label {
+    width: 110px; min-width: 110px;
+    font-size: 13px; font-weight: 600;
+    color: #444;
+  }
+  .trait-bar-bg {
+    flex: 1; height: 12px;
+    background: rgba(0,0,0,0.06);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .trait-bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    width: 0%;
+    transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .trait-value {
+    width: 36px; min-width: 36px;
+    text-align: right;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px; font-weight: 700;
+    color: #333;
+  }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: rgba(255,255,255,0.65);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+    box-shadow: 2px 2px 0 #1a1a1a;
+  }
+  .stat-card .stat-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 20px; font-weight: 700;
+    color: #0d0d0d;
+    line-height: 1.2;
+  }
+  .stat-card .stat-label {
+    font-size: 11px; color: #999;
+    margin-top: 4px; font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Summary */
+  .summary-panel {
+    background: rgba(255,255,255,0.65);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+    padding: 20px 22px;
+    box-shadow: 3px 3px 0 #1a1a1a;
+    margin-bottom: 24px;
+  }
+  .summary-panel h3 {
+    font-size: 11px; font-weight: 700; color: #999;
+    text-transform: uppercase; letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+  .summary-text {
+    font-size: 14px; line-height: 1.7; color: #444;
+  }
+
+  /* Action Buttons */
+  .actions {
+    display: flex; gap: 10px; justify-content: center;
+    flex-wrap: wrap;
+  }
+  .btn-save {
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #00D632, #00b82e);
+    color: #fff; border: none;
+    border-radius: 12px;
+    font-size: 13px; font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+  .btn-save:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0,214,50,0.25);
+  }
+  .btn-another {
+    padding: 12px 24px;
+    background: #fff;
+    color: #333;
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 12px;
+    font-size: 13px; font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+  .btn-another:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .btn-share {
+    padding: 12px 24px;
+    background: #1a1a1a;
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 13px; font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+  .btn-share:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+
+  /* Credit on exported image */
+  .export-credit {
+    display: none;
+    text-align: center;
+    font-size: 12px; color: #aaa;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(0,0,0,0.06);
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    header h1 { font-size: 22px; }
+    #landing { padding: 40px 16px 60px; }
+    .input-group { flex-direction: column; }
+    .btn-analyze { width: 100%; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .trait-label { width: 90px; min-width: 90px; font-size: 12px; }
+    .persona-header { gap: 12px; }
+    .persona-emoji { font-size: 36px; width: 52px; height: 52px; }
+    .persona-archetype { font-size: 18px; }
+    #results { padding: 20px 14px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Abstract <span class="green">Wallet Persona</span></h1>
+  <p class="subtitle">Discover your on-chain personality &middot; built by <a href="https://twitter.com/intent/follow?screen_name=ProofOfEly" target="_blank">@ProofOfEly</a></p>
+</header>
+
+<!-- ── Landing Screen ── -->
+<div id="landing" class="screen active">
+  <div class="hero-emoji">🧠</div>
+  <h2>What does your wallet say about you?</h2>
+  <p class="desc">Enter your Abstract Global Wallet address to get an AI-style psychological profile based on your on-chain transaction patterns.</p>
+  <div class="input-group">
+    <input type="text" id="address-input" placeholder="0x..." spellcheck="false" autocomplete="off">
+    <button class="btn-analyze" id="btn-go" onclick="startAnalysis()">Analyze</button>
+  </div>
+  <p class="examples">
+    <span>Try:</span>
+  </p>
+  <div class="error-msg" id="error-msg"></div>
+</div>
+
+<!-- ── Loading Screen ── -->
+<div id="loading" class="screen">
+  <div class="loading-emoji">🔍</div>
+  <h2>Analyzing Wallet</h2>
+  <div class="loading-address" id="loading-addr"></div>
+  <div class="progress-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+  <div class="loading-status" id="loading-status">Initializing...</div>
+  <div class="loading-stats" id="loading-stats"></div>
+  <button class="btn-cancel" onclick="cancelAnalysis()">Cancel</button>
+</div>
+
+<!-- ── Results Screen ── -->
+<div id="results" class="screen">
+  <div id="capture-area">
+    <div class="persona-card" id="persona-card">
+      <div class="persona-header">
+        <div class="persona-emoji" id="persona-emoji"></div>
+        <div class="persona-titles">
+          <div class="persona-archetype" id="persona-archetype"></div>
+          <div class="persona-secondary" id="persona-secondary"></div>
+        </div>
+      </div>
+      <div class="persona-address" id="persona-address"></div>
+    </div>
+
+    <div class="traits-panel">
+      <h3>Personality Traits</h3>
+      <div id="traits-container"></div>
+    </div>
+
+    <div class="stats-grid" id="stats-grid"></div>
+
+    <div class="summary-panel">
+      <h3>Behavioral Analysis</h3>
+      <div class="summary-text" id="summary-text"></div>
+    </div>
+
+    <div class="export-credit" id="export-credit">
+      Abstract Wallet Persona &middot; @ProofOfEly
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-save" onclick="saveAsImage()">Save as Image</button>
+    <button class="btn-share" onclick="shareLink()">Copy Link</button>
+    <button class="btn-another" onclick="resetToLanding()">Analyze Another</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+// ── Known Token Map ──
+const TOKEN_NAMES = {
+  "0x9ebe3a824ca958e4b3da772d2065518f009cba62": "PENGU",
+  "0x4c68e4102c0f120cce9f08625bd12079806b7c4d": "ABX",
+  "0xc325b7e2736a5202bd860f5974d0aa375e57ede5": "ABSTER",
+  "0x33ee11ce309854a45b65368c078616abcb5c6e3d": "HERO",
+  "0xa9053dc939d74222f7aa0b3a2be407abbfd56c6a": "YGG",
+  "0x4b16703f7b0de03d23fd54606ed5786a59e3f27e": "BURR",
+  "0xdf70075737e9f96b078ab4461eee3e055e061223": "BIG",
+  "0x987cf44f3f5d854ec0703123d7fd003a8b56ebb4": "Polly",
+  "0x3d72ddd35cadb4e5b22cdb20b36f98077be84284": "GOD",
+  "0x92aba186c85b5afeb3a2cedc8772ae8638f1b565": "KONA",
+  "0x1c26da604221466976beeb509698152ba8a3a13f": "GRIND",
+  "0xdc70311f4b19774828aa4a57520a7153af5e58a5": "GOONER",
+  "0x52629ddbf28aa01aa22b994ec9c80273e4eb5b0a": "RETSBA",
+  "0xd5123e07fc179ec67edb8686b1075e72e0670a74": "MECH",
+  "0x85ca16fd0e81659e0b8be337294149e722528731": "NOOT",
+  "0x67c778b5e5705aaa46707f3f16e498beef627b0b": "PANDA",
+  "0x1cd6edb761ed1d68c3cc3c5b9b3e9460887fd139": "CYCLOPS",
+  "0x775fec18be7b2e71c1a20c22f89a697d07c04399": "BANDIT",
+  "0x58241595e4d9d0a1d98a9dbd8d99dc757ed135ff": "BIGHOSS",
+  "0xea08d82824e871a163fdeb7d7c6000521f1be4dd": "GUGO",
+  "0xd045e0686a784e272e651fc2c08324edabe7403a": "CHENGU",
+  "0xb4cf92868a1cd4115524014d6f1fc480bfe9abf5": "Grow",
+  "0x95d7c69694e66aa5010346f8bd23462f6d9a5ae5": "ERK",
+  "0x0a2c776e4f9017ca0679e6064d2f99cf397b6457": "TYAG",
+  "0x44cca204fd7a6b357ed88c2c5fefa667ee7be305": "SPUD",
+  "0x9301d2debe3c501a4bef6ba5b273b7bd346fa57e": "PlanB",
+  "0xbcda9ae6a148bc4fb411979ffa883c9d1df08f43": "MIRAI",
+  "0x9fcfbb837fe77eb4ca6beb35da88134b65416db4": "BROCK",
+  "0x000000000000000000000000000000000000800a": "ETH",
+  "0x3439153eb7af838ad19d56e1571fbd09333c555c": "WETH",
+  "0xe4c7fbb0a626ed208021ccaba6be1566905e2dfc": "USDC"
+};
+
+function tokenName(addr) {
+  return TOKEN_NAMES[addr.toLowerCase()] || (addr.slice(0, 6) + '...' + addr.slice(-4));
+}
+
+// ── RPC Helpers ──
+const RPC = 'https://api.mainnet.abs.xyz';
+const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+const CONCURRENCY = 6;
+let cancelled = false;
+
+function hex(n) { return '0x' + n.toString(16); }
+function fromHex(h) { return parseInt(h, 16); }
+function addrFromTopic(t) { return '0x' + t.slice(26).toLowerCase(); }
+function padAddr(addr) { return '0x' + addr.slice(2).toLowerCase().padStart(64, '0'); }
+
+class RpcError extends Error {
+  constructor(msg) { super(msg); this.name = 'RpcError'; }
+}
+
+async function rpcCall(method, params, retries = 3) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const res = await fetch(RPC, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await res.json();
+      if (data.error) throw new RpcError(data.error.message);
+      return data.result;
+    } catch (e) {
+      // Don't retry RPC-level errors (like "too many results") — only retry network/timeout
+      if (e instanceof RpcError) throw e;
+      if (attempt === retries - 1) throw e;
+      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+    }
+  }
+}
+
+function parseSuggestedSize(errMsg) {
+  const m = errMsg.match(/\[0x([0-9a-fA-F]+),\s*0x([0-9a-fA-F]+)\]/);
+  if (m) return parseInt(m[2], 16) - parseInt(m[1], 16);
+  return 0;
+}
+
+async function fetchRange(fromBlock, toBlock, topicFilter) {
+  try {
+    const logs = await rpcCall('eth_getLogs', [{
+      fromBlock: hex(fromBlock), toBlock: hex(toBlock),
+      topics: [TRANSFER_TOPIC, ...topicFilter],
+    }]);
+    return { logs, from: fromBlock, to: toBlock };
+  } catch (e) {
+    const suggested = parseSuggestedSize(e.message || '');
+    return {
+      error: true, from: fromBlock, to: toBlock,
+      suggestedSize: suggested > 0 ? suggested : Math.max(Math.floor((toBlock - fromBlock) / 4), 500)
+    };
+  }
+}
+
+// ── Main Fetch ──
+async function fetchAllTransfers(address, onProgress) {
+  cancelled = false;
+  const paddedAddr = padAddr(address);
+  const latestBlock = fromHex(await rpcCall('eth_blockNumber', []));
+  const [balance, txCount] = await Promise.all([
+    rpcCall('eth_getBalance', [address, 'latest']),
+    rpcCall('eth_getTransactionCount', [address, 'latest']),
+  ]);
+
+  onProgress({ step: 'Fetching outgoing transfers...', pct: 5 });
+
+  const allLogs = [];
+  let totalFound = 0;
+
+  // Fetch outgoing (wallet in topics[1] = from)
+  async function fetchDirection(topicFilter, label) {
+    const chunkSize = 500_000;
+    const queue = [];
+    for (let f = 0; f <= latestBlock; f += chunkSize) {
+      queue.push([f, Math.min(f + chunkSize - 1, latestBlock)]);
+    }
+    const totalChunks = queue.length;
+    let processed = 0;
+
+    while (queue.length > 0) {
+      if (cancelled) throw new Error('Cancelled');
+      const batchSize = Math.min(CONCURRENCY, queue.length);
+      const batch = queue.splice(0, batchSize);
+      const promises = batch.map(([f, t]) => fetchRange(f, t, topicFilter));
+      const results = await Promise.all(promises);
+
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        if (r.error) {
+          // Split errored range into sub-ranges
+          const subRanges = [];
+          for (let f = r.from; f <= r.to; f += r.suggestedSize) {
+            subRanges.push([f, Math.min(f + r.suggestedSize - 1, r.to)]);
+          }
+          // Re-queue: sub-ranges first, then remaining unprocessed batch entries
+          const remainingBatch = batch.slice(i + 1);
+          queue.unshift(...subRanges, ...remainingBatch);
+          break;
+        }
+        if (Array.isArray(r.logs)) {
+          allLogs.push(...r.logs);
+          totalFound += r.logs.length;
+        }
+        processed++;
+      }
+
+      const basePct = label === 'out' ? 5 : 50;
+      const rangePct = label === 'out' ? 40 : 40;
+      const pct = basePct + Math.round((processed / Math.max(totalChunks, 1)) * rangePct);
+      onProgress({
+        step: label === 'out' ? 'Fetching outgoing transfers...' : 'Fetching incoming transfers...',
+        pct: Math.min(pct, basePct + rangePct),
+        found: totalFound,
+      });
+    }
+  }
+
+  await fetchDirection([paddedAddr, null], 'out');
+  onProgress({ step: 'Fetching incoming transfers...', pct: 50, found: totalFound });
+  await fetchDirection([null, paddedAddr], 'in');
+  onProgress({ step: 'Analyzing patterns...', pct: 92, found: totalFound });
+
+  // Deduplicate logs (self-transfers appear in both directions)
+  const seen = new Set();
+  const dedupedLogs = [];
+  for (const log of allLogs) {
+    const key = log.transactionHash + ':' + log.logIndex;
+    if (!seen.has(key)) {
+      seen.add(key);
+      dedupedLogs.push(log);
+    }
+  }
+
+  return {
+    logs: dedupedLogs,
+    latestBlock,
+    ethBalance: balance ? parseInt(balance, 16) / 1e18 : 0,
+    txCount: txCount ? parseInt(txCount, 16) : 0,
+  };
+}
+
+// ── Analysis Engine ──
+function analyzeWallet(address, data) {
+  const { logs, latestBlock, ethBalance, txCount } = data;
+  const addrLower = address.toLowerCase();
+
+  if (logs.length === 0) {
+    return ghostProfile(address, ethBalance, txCount);
+  }
+
+  // Parse all transfers (handle ERC-721 NFTs where data is "0x" and tokenId is in topics[3])
+  const transfers = logs.map(log => {
+    let amount;
+    try {
+      amount = (log.data && log.data !== '0x') ? BigInt(log.data) : 1n;
+    } catch (e) {
+      amount = 1n;
+    }
+    return {
+      block: fromHex(log.blockNumber),
+      from: addrFromTopic(log.topics[1]),
+      to: addrFromTopic(log.topics[2]),
+      token: log.address.toLowerCase(),
+      amount,
+      txHash: log.transactionHash,
+    };
+  }).sort((a, b) => a.block - b.block);
+
+  // Classify as send/receive
+  const sends = transfers.filter(t => t.from === addrLower);
+  const receives = transfers.filter(t => t.to === addrLower);
+
+  // Unique tokens + counterparties
+  const tokenSet = new Set(transfers.map(t => t.token));
+  const counterpartySet = new Set();
+  sends.forEach(t => counterpartySet.add(t.to));
+  receives.forEach(t => counterpartySet.add(t.from));
+  counterpartySet.delete('0x' + '0'.repeat(40));
+
+  const uniqueTokens = tokenSet.size;
+  const uniqueCounterparties = counterpartySet.size;
+  const totalTransfers = transfers.length;
+  const buyCount = receives.length;
+  const sellCount = sends.length;
+  const buySellRatio = sellCount > 0 ? (buyCount / sellCount) : buyCount;
+
+  // Activity span (blocks)
+  const firstBlock = transfers[0].block;
+  const lastBlock = transfers[transfers.length - 1].block;
+  const activitySpanBlocks = lastBlock - firstBlock;
+  const BLOCKS_PER_DAY = Math.round(86400 / 0.8);
+  const activitySpanDays = Math.max(1, Math.round(activitySpanBlocks / BLOCKS_PER_DAY));
+
+  // Average hold duration per token
+  // Track first receive to first send per token
+  const tokenFirstReceive = {};
+  const tokenFirstSend = {};
+  receives.forEach(t => {
+    if (!tokenFirstReceive[t.token]) tokenFirstReceive[t.token] = t.block;
+  });
+  sends.forEach(t => {
+    if (!tokenFirstSend[t.token]) tokenFirstSend[t.token] = t.block;
+  });
+
+  let totalHoldBlocks = 0;
+  let holdCount = 0;
+  for (const token of tokenSet) {
+    const firstRec = tokenFirstReceive[token];
+    const firstSnd = tokenFirstSend[token];
+    if (firstRec && firstSnd && firstSnd > firstRec) {
+      totalHoldBlocks += (firstSnd - firstRec);
+      holdCount++;
+    } else if (firstRec && !firstSnd) {
+      // Still holding — use blocks since first receive
+      totalHoldBlocks += (latestBlock - firstRec);
+      holdCount++;
+    }
+  }
+  const avgHoldDays = holdCount > 0 ? Math.round((totalHoldBlocks / holdCount) / BLOCKS_PER_DAY) : 0;
+
+  // Frequency: transfers per day
+  const txPerDay = totalTransfers / Math.max(activitySpanDays, 1);
+
+  // Quick flip ratio: tokens bought and sold within ~2 hours
+  const QUICK_FLIP_BLOCKS = Math.round(7200 / 0.8); // 2 hours
+  let quickFlips = 0;
+  for (const token of tokenSet) {
+    const fr = tokenFirstReceive[token];
+    const fs = tokenFirstSend[token];
+    if (fr && fs && fs - fr < QUICK_FLIP_BLOCKS && fs > fr) quickFlips++;
+  }
+  const quickFlipRatio = uniqueTokens > 0 ? quickFlips / uniqueTokens : 0;
+
+  // Tokens only received (never sold)
+  let holdOnlyTokens = 0;
+  for (const token of tokenSet) {
+    if (tokenFirstReceive[token] && !tokenFirstSend[token]) holdOnlyTokens++;
+  }
+  const holdRatio = uniqueTokens > 0 ? holdOnlyTokens / uniqueTokens : 0;
+
+  // Concentration: what % of transfers go to top token
+  const tokenTransferCounts = {};
+  transfers.forEach(t => { tokenTransferCounts[t.token] = (tokenTransferCounts[t.token] || 0) + 1; });
+  const maxTokenTransfers = Math.max(...Object.values(tokenTransferCounts));
+  const concentration = totalTransfers > 0 ? maxTokenTransfers / totalTransfers : 0;
+
+  // Recency: blocks since last activity
+  const blocksSinceLastActivity = latestBlock - lastBlock;
+  const daysSinceLastActivity = Math.round(blocksSinceLastActivity / BLOCKS_PER_DAY);
+
+  // ── Score Traits (0-100) ──
+  const traits = {};
+
+  // Impulsiveness: high tx frequency + quick flips
+  traits.Impulsiveness = clamp(Math.round(
+    (Math.min(txPerDay / 10, 1) * 50) + (quickFlipRatio * 50)
+  ));
+
+  // Patience: high hold duration + high hold ratio
+  traits.Patience = clamp(Math.round(
+    (Math.min(avgHoldDays / 60, 1) * 60) + (holdRatio * 40)
+  ));
+
+  // Risk Tolerance: token diversity + quick flips + high frequency
+  traits['Risk Tolerance'] = clamp(Math.round(
+    (Math.min(uniqueTokens / 20, 1) * 35) +
+    (quickFlipRatio * 35) +
+    (Math.min(txPerDay / 8, 1) * 30)
+  ));
+
+  // Diversification: unique tokens + low concentration
+  traits.Diversification = clamp(Math.round(
+    (Math.min(uniqueTokens / 15, 1) * 60) +
+    ((1 - concentration) * 40)
+  ));
+
+  // Consistency: regular activity + long span
+  traits.Consistency = clamp(Math.round(
+    (Math.min(activitySpanDays / 90, 1) * 50) +
+    (Math.min(txPerDay / 2, 1) * 30) +
+    ((daysSinceLastActivity < 7 ? 1 : daysSinceLastActivity < 30 ? 0.5 : 0) * 20)
+  ));
+
+  // FOMO Score: many tokens + quick flips + high frequency + high diversity
+  traits['FOMO Score'] = clamp(Math.round(
+    (Math.min(uniqueTokens / 12, 1) * 30) +
+    (quickFlipRatio * 30) +
+    (Math.min(txPerDay / 6, 1) * 20) +
+    (Math.min(uniqueCounterparties / 30, 1) * 20)
+  ));
+
+  // ── Score Archetypes ──
+  const archetypeScores = {};
+
+  // Diamond Hands: high patience, high hold ratio, low quick flips, low impulsiveness
+  archetypeScores['Diamond Hands'] = (
+    traits.Patience * 0.35 +
+    (holdRatio * 100) * 0.25 +
+    ((1 - quickFlipRatio) * 100) * 0.2 +
+    ((100 - traits.Impulsiveness)) * 0.2
+  );
+
+  // Degen: high frequency, many tokens, quick flips, high FOMO
+  archetypeScores['Degen'] = (
+    traits.Impulsiveness * 0.3 +
+    traits['FOMO Score'] * 0.25 +
+    (quickFlipRatio * 100) * 0.25 +
+    traits['Risk Tolerance'] * 0.2
+  );
+
+  // Whale: high concentration, high total activity, high ETH balance
+  archetypeScores['Whale'] = (
+    (concentration * 100) * 0.3 +
+    (Math.min(totalTransfers / 200, 1) * 100) * 0.25 +
+    (Math.min(ethBalance / 5, 1) * 100) * 0.25 +
+    (Math.min(txCount / 500, 1) * 100) * 0.2
+  );
+
+  // Collector: extreme diversity, high unique tokens, high hold ratio
+  archetypeScores['Collector'] = (
+    traits.Diversification * 0.35 +
+    (Math.min(uniqueTokens / 20, 1) * 100) * 0.3 +
+    (holdRatio * 100) * 0.2 +
+    traits.Patience * 0.15
+  );
+
+  // Sniper: quick flips dominant, low hold duration, calculated
+  archetypeScores['Sniper'] = (
+    (quickFlipRatio * 100) * 0.4 +
+    traits.Impulsiveness * 0.2 +
+    ((100 - traits.Patience)) * 0.2 +
+    (Math.min(txPerDay / 5, 1) * 100) * 0.2
+  );
+
+  // Ghost: very low activity
+  archetypeScores['Ghost'] = (
+    ((100 - Math.min(totalTransfers / 5, 1) * 100)) * 0.4 +
+    ((100 - Math.min(uniqueTokens / 3, 1) * 100)) * 0.3 +
+    (Math.min(daysSinceLastActivity / 30, 1) * 100) * 0.3
+  );
+
+  // Strategist: balanced traits, moderate activity, measured
+  const traitValues = Object.values(traits);
+  const traitAvg = traitValues.reduce((a, b) => a + b, 0) / traitValues.length;
+  const traitVariance = traitValues.reduce((s, v) => s + Math.pow(v - traitAvg, 2), 0) / traitValues.length;
+  const balanceScore = Math.max(0, 100 - Math.sqrt(traitVariance));
+
+  archetypeScores['Strategist'] = (
+    balanceScore * 0.4 +
+    traits.Consistency * 0.25 +
+    (Math.min(activitySpanDays / 60, 1) * 100) * 0.2 +
+    ((100 - traits['FOMO Score'])) * 0.15
+  );
+
+  // Pick top 2 archetypes
+  const sorted = Object.entries(archetypeScores).sort((a, b) => b[1] - a[1]);
+  const primary = sorted[0][0];
+  const secondary = sorted[1][0];
+
+  // ── Top tokens ──
+  const topTokens = Object.entries(tokenTransferCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([addr, count]) => ({ name: tokenName(addr), count }));
+
+  // ── Stats ──
+  const stats = {
+    totalTransfers,
+    uniqueTokens,
+    uniqueCounterparties,
+    buySellRatio: buySellRatio > 100 ? '∞' : buySellRatio.toFixed(1),
+    avgHoldDays: avgHoldDays > 365 ? Math.round(avgHoldDays / 365) + 'y' : avgHoldDays + 'd',
+    activitySpan: activitySpanDays > 365 ? Math.round(activitySpanDays / 365) + 'y' : activitySpanDays + 'd',
+  };
+
+  // ── Summary ──
+  const summary = generateSummary(primary, secondary, traits, stats, topTokens, avgHoldDays, quickFlipRatio, holdRatio, txPerDay, activitySpanDays);
+
+  return { primary, secondary, traits, stats, summary, topTokens };
+}
+
+function ghostProfile(address, ethBalance, txCount) {
+  return {
+    primary: 'Ghost',
+    secondary: 'Strategist',
+    traits: {
+      Impulsiveness: 5,
+      Patience: 90,
+      'Risk Tolerance': 10,
+      Diversification: 5,
+      Consistency: 10,
+      'FOMO Score': 5,
+    },
+    stats: {
+      totalTransfers: 0,
+      uniqueTokens: 0,
+      uniqueCounterparties: 0,
+      buySellRatio: '—',
+      avgHoldDays: '—',
+      activitySpan: '—',
+    },
+    summary: `This wallet is a true ghost on the Abstract chain — zero ERC-20 token transfers detected. ` +
+      (ethBalance > 0 ? `It holds ${ethBalance.toFixed(4)} ETH, sitting quietly. ` : '') +
+      (txCount > 0 ? `There are ${txCount} native transactions on record, but no token activity. ` : '') +
+      `Whether this is patience, stealth, or simply dormancy — only the wallet holder knows.`,
+    topTokens: [],
+  };
+}
+
+function generateSummary(primary, secondary, traits, stats, topTokens, avgHoldDays, quickFlipRatio, holdRatio, txPerDay, activitySpanDays) {
+  const parts = [];
+
+  // Archetype intro
+  const intros = {
+    'Diamond Hands': `This wallet embodies the Diamond Hands spirit — once tokens are acquired, they're held with conviction.`,
+    'Degen': `A classic degen wallet — always moving, always experimenting, never sitting still.`,
+    'Whale': `This wallet carries serious weight on Abstract — concentrated positions and significant activity.`,
+    'Collector': `A true collector at heart — this wallet has touched a remarkable variety of tokens.`,
+    'Sniper': `Precision over patience — this wallet strikes fast and moves on.`,
+    'Ghost': `The silent type — minimal footprint but watching from the shadows.`,
+    'Strategist': `A measured, balanced approach — no single pattern dominates this wallet's behavior.`,
+  };
+  parts.push(intros[primary]);
+
+  // Secondary flavor
+  parts.push(`With ${ARCHETYPE_META[secondary].emoji} ${secondary} tendencies as a secondary trait,`);
+
+  // Activity detail
+  if (txPerDay > 5) {
+    parts.push(`they average an impressive ${txPerDay.toFixed(1)} transfers per day.`);
+  } else if (txPerDay > 1) {
+    parts.push(`they maintain a steady pace of ~${txPerDay.toFixed(1)} transfers daily.`);
+  } else if (txPerDay > 0.1) {
+    parts.push(`they trade at a measured pace — roughly one transfer every ${Math.round(1/txPerDay)} days.`);
+  } else {
+    parts.push(`activity is sparse but deliberate.`);
+  }
+
+  // Token diversity
+  if (stats.uniqueTokens > 15) {
+    parts.push(`Across ${stats.uniqueTokens} different tokens, the portfolio is highly diverse.`);
+  } else if (stats.uniqueTokens > 5) {
+    parts.push(`They've engaged with ${stats.uniqueTokens} tokens — a healthy mix.`);
+  } else if (stats.uniqueTokens > 0) {
+    parts.push(`With only ${stats.uniqueTokens} token${stats.uniqueTokens === 1 ? '' : 's'}, they stay focused.`);
+  }
+
+  // Top tokens
+  if (topTokens.length > 0) {
+    const names = topTokens.slice(0, 3).map(t => t.name);
+    parts.push(`Most active with ${names.join(', ')}.`);
+  }
+
+  // Hold behavior
+  if (holdRatio > 0.7) {
+    parts.push(`Over ${Math.round(holdRatio * 100)}% of tokens acquired have never been sold — strong holder conviction.`);
+  } else if (quickFlipRatio > 0.4) {
+    parts.push(`About ${Math.round(quickFlipRatio * 100)}% of tokens were flipped quickly — a clear appetite for fast moves.`);
+  }
+
+  // FOMO / risk note
+  if (traits['FOMO Score'] > 70) {
+    parts.push(`The high FOMO score suggests they chase new opportunities aggressively.`);
+  } else if (traits['Risk Tolerance'] > 70) {
+    parts.push(`High risk tolerance drives their strategy — not afraid to go big.`);
+  } else if (traits.Patience > 70) {
+    parts.push(`Patience is their superpower — they let positions mature.`);
+  }
+
+  return parts.join(' ');
+}
+
+function clamp(v) { return Math.max(0, Math.min(100, v)); }
+
+// ── Archetype Metadata ──
+const ARCHETYPE_META = {
+  'Diamond Hands': { emoji: '💎', color: '#6C63FF' },
+  'Degen':         { emoji: '🎰', color: '#FF6B6B' },
+  'Whale':         { emoji: '🐋', color: '#4ECDC4' },
+  'Collector':     { emoji: '🦋', color: '#FFB347' },
+  'Sniper':        { emoji: '🎯', color: '#FF4757' },
+  'Ghost':         { emoji: '👻', color: '#A8A8A8' },
+  'Strategist':    { emoji: '♟️', color: '#00D632' },
+};
+
+const TRAIT_COLORS = {
+  Impulsiveness:   '#FF6B6B',
+  Patience:        '#4ECDC4',
+  'Risk Tolerance':'#FFB347',
+  Diversification: '#6C63FF',
+  Consistency:     '#00D632',
+  'FOMO Score':    '#FF4757',
+};
+
+// ── UI Logic ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function hideError() {
+  document.getElementById('error-msg').style.display = 'none';
+}
+
+function isValidAddress(addr) {
+  return /^0x[0-9a-fA-F]{40}$/.test(addr);
+}
+
+async function startAnalysis() {
+  hideError();
+  const input = document.getElementById('address-input').value.trim();
+  if (!isValidAddress(input)) {
+    showError('Please enter a valid Ethereum address (0x followed by 40 hex characters)');
+    return;
+  }
+
+  const address = input.toLowerCase();
+  document.getElementById('btn-go').disabled = true;
+
+  // Update URL
+  const url = new URL(window.location);
+  url.searchParams.set('address', address);
+  history.pushState({}, '', url);
+
+  showScreen('loading');
+  document.getElementById('loading-addr').textContent = address;
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('loading-status').textContent = 'Initializing...';
+  document.getElementById('loading-stats').textContent = '';
+
+  try {
+    const data = await fetchAllTransfers(address, ({ step, pct, found }) => {
+      document.getElementById('progress-bar').style.width = pct + '%';
+      document.getElementById('loading-status').textContent = step;
+      if (found !== undefined) {
+        document.getElementById('loading-stats').textContent = `${found.toLocaleString()} transfers found`;
+      }
+    });
+
+    document.getElementById('progress-bar').style.width = '95%';
+    document.getElementById('loading-status').textContent = 'Building personality profile...';
+
+    // Small delay for the progress bar to feel satisfying
+    await new Promise(r => setTimeout(r, 500));
+
+    const result = analyzeWallet(address, data);
+    renderResults(address, result);
+    showScreen('results');
+
+    // Animate trait bars after a short delay
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        document.querySelectorAll('.trait-bar-fill').forEach(bar => {
+          bar.style.width = bar.dataset.target + '%';
+        });
+      }, 100);
+    });
+  } catch (e) {
+    if (e.message === 'Cancelled') {
+      showScreen('landing');
+      document.getElementById('btn-go').disabled = false;
+      return;
+    }
+    showScreen('landing');
+    showError('Error analyzing wallet: ' + e.message);
+  }
+  document.getElementById('btn-go').disabled = false;
+}
+
+function cancelAnalysis() {
+  cancelled = true;
+}
+
+function renderResults(address, result) {
+  const meta = ARCHETYPE_META[result.primary];
+
+  // Persona card
+  document.getElementById('persona-emoji').textContent = meta.emoji;
+  document.getElementById('persona-archetype').textContent = meta.emoji + ' ' + result.primary;
+  document.getElementById('persona-archetype').style.color = meta.color;
+  document.getElementById('persona-secondary').textContent =
+    'with ' + ARCHETYPE_META[result.secondary].emoji + ' ' + result.secondary + ' tendencies';
+  document.getElementById('persona-address').textContent = address;
+
+  // Trait bars
+  const container = document.getElementById('traits-container');
+  container.innerHTML = '';
+  for (const [name, value] of Object.entries(result.traits)) {
+    const color = TRAIT_COLORS[name] || '#00D632';
+    const row = document.createElement('div');
+    row.className = 'trait-row';
+    row.innerHTML = `
+      <div class="trait-label">${name}</div>
+      <div class="trait-bar-bg">
+        <div class="trait-bar-fill" data-target="${value}" style="background: ${color}; width: 0%;"></div>
+      </div>
+      <div class="trait-value">${value}</div>
+    `;
+    container.appendChild(row);
+  }
+
+  // Stats grid
+  const grid = document.getElementById('stats-grid');
+  const statEntries = [
+    { val: result.stats.totalTransfers.toLocaleString(), label: 'Transfers' },
+    { val: result.stats.uniqueTokens, label: 'Tokens' },
+    { val: result.stats.uniqueCounterparties, label: 'Counterparties' },
+    { val: result.stats.buySellRatio, label: 'Buy/Sell Ratio' },
+    { val: result.stats.avgHoldDays, label: 'Avg Hold' },
+    { val: result.stats.activitySpan, label: 'Active For' },
+  ];
+  grid.innerHTML = statEntries.map(s => `
+    <div class="stat-card">
+      <div class="stat-val">${s.val}</div>
+      <div class="stat-label">${s.label}</div>
+    </div>
+  `).join('');
+
+  // Summary
+  document.getElementById('summary-text').textContent = result.summary;
+}
+
+function resetToLanding() {
+  showScreen('landing');
+  const url = new URL(window.location);
+  url.searchParams.delete('address');
+  history.pushState({}, '', url);
+  document.getElementById('address-input').value = '';
+}
+
+async function saveAsImage() {
+  const credit = document.getElementById('export-credit');
+  credit.style.display = 'block';
+
+  try {
+    const el = document.getElementById('capture-area');
+    const canvas = await html2canvas(el, {
+      backgroundColor: '#f0efe9',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+
+    // Make it 1:1 (square)
+    const size = Math.max(canvas.width, canvas.height) + 80;
+    const sq = document.createElement('canvas');
+    sq.width = size;
+    sq.height = size;
+    const ctx = sq.getContext('2d');
+
+    // Background with grid
+    ctx.fillStyle = '#f0efe9';
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < size; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, size); ctx.stroke(); }
+    for (let y = 0; y < size; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(size, y); ctx.stroke(); }
+
+    // Center the capture
+    const ox = Math.round((size - canvas.width) / 2);
+    const oy = Math.round((size - canvas.height) / 2);
+    ctx.drawImage(canvas, ox, oy);
+
+    const link = document.createElement('a');
+    link.download = 'abstract-wallet-persona.png';
+    link.href = sq.toDataURL('image/png');
+    link.click();
+  } finally {
+    credit.style.display = 'none';
+  }
+}
+
+function shareLink() {
+  const url = window.location.href;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.querySelector('.btn-share');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  });
+}
+
+// ── Init: Check URL params ──
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const addr = params.get('address');
+  if (addr && isValidAddress(addr)) {
+    document.getElementById('address-input').value = addr;
+    startAnalysis();
+  }
+
+  // Enter key on input
+  document.getElementById('address-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') startAnalysis();
+  });
+
+  // Set up example addresses
+  setupExamples();
+});
+
+function setupExamples() {
+  const examplesEl = document.querySelector('.examples');
+  const examples = [
+    '0x884f68c1ec60f144b7ca0de2f18476a8e9fc1590',
+    '0x63e5baae513c866d938df53b469c9978e214456f',
+  ];
+  examplesEl.innerHTML = '<span>Try: </span>';
+  examples.forEach((addr, i) => {
+    const span = document.createElement('span');
+    span.className = 'example-addr';
+    span.textContent = addr.slice(0, 6) + '...' + addr.slice(-4);
+    span.onclick = () => {
+      document.getElementById('address-input').value = addr;
+      startAnalysis();
+    };
+    examplesEl.appendChild(span);
+    if (i < examples.length - 1) {
+      examplesEl.appendChild(document.createTextNode(' '));
+    }
+  });
+}
+</script>
+</body>
+</html>
