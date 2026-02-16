@@ -612,7 +612,7 @@ async function rpcCall(method, params, retries = 3) {
       if (data.error) throw new RpcError(data.error.message);
       return data.result;
     } catch (e) {
-      // Don't retry RPC-level errors (like "too many results") — only retry network/timeout
+      // Don't retry RPC-level errors (like "too many results"), only retry network/timeout
       if (e instanceof RpcError) throw e;
       if (attempt === retries - 1) throw e;
       await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
@@ -730,7 +730,7 @@ async function fetchAllTransfers(address, onProgress) {
 }
 
 // ── Analysis Engine ──
-// Native ETH wrapper on Abstract — exclude from token analysis
+// Native ETH wrapper on Abstract, exclude from token analysis
 const NATIVE_ETH = '0x000000000000000000000000000000000000800a';
 
 async function analyzeWallet(address, data) {
@@ -1069,7 +1069,7 @@ function minimalProfile(address, ethBalance, txCount, nftCount, ethCount, nftCon
       avgHoldDays: '—',
       activitySpan: spanDays > 365 ? Math.round(spanDays / 365) + 'y' : spanDays + 'd',
     },
-    summary: `This wallet is primarily an NFT collector on Abstract — ${nftContracts} NFT collections touched` +
+    summary: `This wallet is primarily an NFT collector on Abstract, touching ${nftContracts} NFT collections` +
       (ethCount > 0 ? ` alongside ${ethCount} native ETH transfers` : '') +
       `. No significant ERC-20 token trading detected. ` +
       (ethBalance > 0 ? `Currently holds ${ethBalance.toFixed(4)} ETH. ` : '') +
@@ -1098,10 +1098,10 @@ function ghostProfile(address, ethBalance, txCount) {
       avgHoldDays: '—',
       activitySpan: '—',
     },
-    summary: `This wallet is a true ghost on the Abstract chain — zero ERC-20 token transfers detected. ` +
+    summary: `This wallet is a true ghost on the Abstract chain. Zero ERC-20 token transfers detected. ` +
       (ethBalance > 0 ? `It holds ${ethBalance.toFixed(4)} ETH, sitting quietly. ` : '') +
       (txCount > 0 ? `There are ${txCount} native transactions on record, but no token activity. ` : '') +
-      `Whether this is patience, stealth, or simply dormancy — only the wallet holder knows.`,
+      `Whether this is patience, stealth, or simply dormancy, only the wallet holder knows.`,
     topTokens: [],
   };
 }
@@ -1126,18 +1126,18 @@ function generateSummary(ctx) {
     ],
     'Degen': [
       `If it launched in the last 5 minutes, this wallet probably already aped in. Pure degen energy.`,
-      `This wallet treats Abstract like a casino floor — always at a table, always in action.`,
+      `This wallet treats Abstract like a casino floor: always at a table, always in action.`,
     ],
     'Whale': [
       `When this wallet moves, the chart moves with it. Concentrated bets and heavy volume define this address.`,
-      `This is a heavyweight on Abstract — few tokens, big positions, serious conviction.`,
+      `This is a heavyweight on Abstract: few tokens, big positions, serious conviction.`,
     ],
     'Collector': [
-      `This wallet collects tokens like trading cards — gotta catch 'em all. Breadth over depth defines their approach.`,
-      `A digital hoarder in the best sense — this wallet samples everything the Abstract ecosystem has to offer.`,
+      `This wallet collects tokens like trading cards: gotta catch 'em all. Breadth over depth defines their approach.`,
+      `A digital hoarder in the best sense. This wallet samples everything the Abstract ecosystem has to offer.`,
     ],
     'Sniper': [
-      `Quick draw, quicker exit. This wallet doesn't marry positions — it dates them briefly and moves on.`,
+      `Quick draw, quicker exit. This wallet doesn't marry positions, it dates them briefly and moves on.`,
       `Surgical precision. This wallet enters fast, takes profit, and ghosts before sentiment shifts.`,
     ],
     'Ghost': [
@@ -1145,7 +1145,7 @@ function generateSummary(ctx) {
       `If wallets had stealth mode, this one would have it permanently enabled.`,
     ],
     'Strategist': [
-      `No single impulse drives this wallet — it's a balance of instincts. Calculated, diversified, and methodical.`,
+      `No single impulse drives this wallet. It's a balance of instincts: calculated, diversified, and methodical.`,
       `This wallet reads like someone who actually thinks before clicking "Confirm Transaction."`,
     ],
   };
@@ -1154,17 +1154,17 @@ function generateSummary(ctx) {
 
   // ── Trading rhythm ──
   if (burstRatio > 5) {
-    p.push(`Their activity comes in bursts — quiet periods punctuated by ${maxDayTx}+ transfer days. When they're on, they're ALL in.`);
+    p.push(`Their activity comes in bursts: quiet periods punctuated by ${maxDayTx}+ transfer days. When they're on, they're ALL in.`);
   } else if (burstRatio > 2.5) {
-    p.push(`The trading pattern is streaky — some days nothing, then sudden flurries of activity. An opportunistic rhythm.`);
+    p.push(`The trading pattern is streaky: some days nothing, then sudden flurries of activity. An opportunistic rhythm.`);
   } else if (txPerDay > 3) {
-    p.push(`Remarkably consistent pace — active almost daily with a steady ${txPerDay.toFixed(1)} transfers per day. No day off from the grind.`);
+    p.push(`Remarkably consistent pace, active almost daily with a steady ${txPerDay.toFixed(1)} transfers per day. No day off from the grind.`);
   }
 
   if (activeDayPct < 30 && activitySpanDays > 14) {
-    p.push(`Only active on ${activeDayPct}% of days since first transaction — a patient lurker who picks their spots carefully.`);
+    p.push(`Only active on ${activeDayPct}% of days since first transaction. A patient lurker who picks their spots carefully.`);
   } else if (activeDayPct > 80) {
-    p.push(`Active on ${activeDayPct}% of days — the kind of trader who checks charts before breakfast.`);
+    p.push(`Active on ${activeDayPct}% of days, the kind of trader who checks charts before breakfast.`);
   }
 
   // ── Portfolio character ──
@@ -1172,9 +1172,9 @@ function generateSummary(ctx) {
     const topName = topTokens[0].name;
     const topPct = Math.round(concentration * 100);
     if (concentration > 0.5) {
-      p.push(`${topName} dominates the portfolio at ${topPct}% of all transfers — this is a true believer, not a diversifier.`);
+      p.push(`${topName} dominates the portfolio at ${topPct}% of all transfers. A true believer, not a diversifier.`);
     } else if (topTokens.length >= 3) {
-      p.push(`Core holdings center around ${topTokens[0].name}, ${topTokens[1].name}, and ${topTokens[2].name} — the tokens they keep coming back to.`);
+      p.push(`Core holdings center around ${topTokens[0].name}, ${topTokens[1].name}, and ${topTokens[2].name}: the tokens they keep coming back to.`);
     } else {
       p.push(`${topName} is the main focus, making up ${topPct}% of activity.`);
     }
@@ -1182,9 +1182,9 @@ function generateSummary(ctx) {
 
   // ── Holder vs flipper psychology ──
   if (holdRatio > 0.6 && avgHoldDays > 14) {
-    p.push(`${Math.round(holdRatio * 100)}% of tokens touched have never been sold. This isn't trading — it's accumulation with conviction.`);
+    p.push(`${Math.round(holdRatio * 100)}% of tokens touched have never been sold. This isn't trading, it's accumulation with conviction.`);
   } else if (holdRatio > 0.4) {
-    p.push(`About ${Math.round(holdRatio * 100)}% of tokens are still held — a mix of conviction plays and forgot-about-its.`);
+    p.push(`About ${Math.round(holdRatio * 100)}% of tokens are still held, a mix of conviction plays and forgot-about-its.`);
   } else if (quickFlipRatio > 0.3) {
     p.push(`${Math.round(quickFlipRatio * 100)}% of tokens were flipped within hours of acquiring them. The motto: "take profit and don't look back."`);
   }
@@ -1192,35 +1192,35 @@ function generateSummary(ctx) {
   // ── Longest hold ──
   if (longestHoldToken && longestHoldDays > 7) {
     if (longestHoldDays > 90) {
-      p.push(`Diamond-handing ${longestHoldToken} for ${longestHoldDays} days and counting — that's real loyalty in a meme coin world.`);
+      p.push(`Diamond-handing ${longestHoldToken} for ${longestHoldDays} days and counting. That's real loyalty in a meme coin world.`);
     } else if (longestHoldDays > 30) {
-      p.push(`Longest hold: ${longestHoldToken} at ${longestHoldDays} days — showing that patience exists somewhere in the portfolio.`);
+      p.push(`Longest hold: ${longestHoldToken} at ${longestHoldDays} days, showing that patience exists somewhere in the portfolio.`);
     }
   }
 
   // ── Buy/sell behavior ──
   if (buyCount > sellCount * 3) {
-    p.push(`Buys outnumber sells ${(buyCount/sellCount).toFixed(0)}:1 — an accumulator who rarely lets go.`);
+    p.push(`Buys outnumber sells ${(buyCount/sellCount).toFixed(0)}:1, an accumulator who rarely lets go.`);
   } else if (sellCount > buyCount * 1.5) {
-    p.push(`More sells than buys — either taking profits or cleaning house. This wallet isn't afraid to exit.`);
+    p.push(`More sells than buys: either taking profits or cleaning house. This wallet isn't afraid to exit.`);
   }
 
   // ── Social/ecosystem signals ──
   if (uniqueNFTs > 20) {
-    p.push(`Also deep in the NFT scene with ${uniqueNFTs} collections — clearly embedded in the Abstract community, not just trading.`);
+    p.push(`Also deep in the NFT scene with ${uniqueNFTs} collections, clearly embedded in the Abstract community, not just trading.`);
   } else if (uniqueNFTs > 5) {
-    p.push(`${uniqueNFTs} NFT collections in the mix too — they're not just here for charts.`);
+    p.push(`${uniqueNFTs} NFT collections in the mix too, they're not just here for charts.`);
   }
 
   if (uniqueCounterparties > 50) {
-    p.push(`Interacted with ${uniqueCounterparties} unique addresses — a wide social web on-chain.`);
+    p.push(`Interacted with ${uniqueCounterparties} unique addresses, a wide social web on-chain.`);
   }
 
   // ── Recency ──
   if (daysSinceLastActivity < 1) {
     p.push(`Last seen: today. Still very much in the game.`);
   } else if (daysSinceLastActivity < 7) {
-    p.push(`Last active ${daysSinceLastActivity} day${daysSinceLastActivity === 1 ? '' : 's'} ago — still in the trenches.`);
+    p.push(`Last active ${daysSinceLastActivity} day${daysSinceLastActivity === 1 ? '' : 's'} ago, still in the trenches.`);
   } else if (daysSinceLastActivity > 30) {
     p.push(`Been quiet for ${daysSinceLastActivity} days now. Resting, or already moved on?`);
   }
@@ -1232,7 +1232,7 @@ function generateSummary(ctx) {
     Patience: `TL;DR: The kind of wallet that sets a limit order and takes a nap.`,
     'Risk Tolerance': `TL;DR: "Safe plays" is not in this wallet's vocabulary.`,
     Diversification: `TL;DR: Why pick one token when you can pick all of them?`,
-    Consistency: `TL;DR: The tortoise in a world of hares — slow, steady, and still here.`,
+    Consistency: `TL;DR: The tortoise in a world of hares: slow, steady, and still here.`,
     'FOMO Score': `TL;DR: If someone on CT says "this is the one," this wallet is already in.`,
   };
   if (closers[maxTrait[0]] && maxTrait[1] > 60) {
